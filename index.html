@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Barcode Reader</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
+  <style>
+    .barcode-polygon {
+      fill:rgba(85,240,40,0.4);
+      stroke:green;
+      stroke-width:5;
+    }
+    
+    .barcode-polygon:hover {
+      fill:rgba(85,240,40,0.6);
+      stroke:green;
+      stroke-width:5;
+    }
+
+    #resultSVG {
+      max-width: 500px;
+    }
+    </style>
+</head>
+
+<body>
+  <div>
+    <label>URL:</label>
+    <input type="text" id="url" value="http://127.0.0.1:8080"/>
+    <div>
+      Load local image:
+      <input type="file" id="barcodeFile" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
+    </div>
+    <button onclick="decode()">Decode</button>
+    <span id="status"></span>
+  </div>
+  <div>
+    <svg id="resultSVG" version="1.1" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <script>
+    let img;
+
+    function loadImageFromFile() { 
+      let files = document.getElementById('barcodeFile').files;
+      if (files.length == 0) {
+        return;
+      }
+      let file = files[0];
+      fileReader = new FileReader();
+      fileReader.onload = function(e){
+        loadImage(e.target.result);
+      };
+      fileReader.onerror = function () {
+        console.warn('oops, something went wrong.');
+      };
+      fileReader.readAsDataURL(file);
+    }
+
+    function decode(){
+      document.getElementById("status").innerText = "decoding...";
+      let url = document.getElementById("url").value + "/readBarcodes";
+      console.log(url);
+      let xhr = new XMLHttpRequest();
+      let pay_load = {};
+      let dataURL = img.src;
+      let base64 = dataURL.substring(dataURL.indexOf(",")+1,dataURL.length);
+      pay_load["base64"] = base64;
+      
+      xhr.open('POST', url);
+      xhr.setRequestHeader('content-type', 'application/json'); 
+
+      xhr.onreadystatechange = function(){
+        if(xhr.readyState === 4){
+          if (xhr.status === 200) {
+            console.log(xhr.responseText);
+            let detectionResult = JSON.parse(xhr.responseText);
+            overlayResults(detectionResult.results);
+            document.getElementById("status").innerText = "";
+          }
+        }
+      }
+      xhr.send(JSON.stringify(pay_load));
+
+    }
+    
+    
+
+    function overlayResults(results){
+      let svgElement = document.getElementById("resultSVG");
+      clearElements(svgElement,"polygon");
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        let a = document.createElementNS("http://www.w3.org/2000/svg","a");
+        let polygon = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+        polygon.setAttribute("points",getPointsAttribute(result));
+        polygon.setAttribute("class","barcode-polygon");
+        let title = document.createElementNS("http://www.w3.org/2000/svg","title");
+        title.textContent = result.barcodeFormat + ": " + result.barcodeText;
+        polygon.append(title);
+        a.append(polygon)
+        svgElement.append(a);
+      }
+    }
+
+    function getPointsAttribute(result) {
+      let pointsData = result.x1 + "," + result.y1 + " ";
+      pointsData = pointsData + result.x2+ "," + result.y2 + " ";
+      pointsData = pointsData + result.x3+ "," + result.y3 + " ";
+      pointsData = pointsData + result.x4+ "," + result.y4;
+      return pointsData;
+    }
+
+    function clearElements(parent,tagName){
+      let elements=parent.getElementsByTagName(tagName);
+      while (elements.length>0){
+        let ele=elements[0];
+        ele.remove();
+      }
+    }
+
+
+    function loadImage(imgsrc){
+      if (imgsrc) {
+        img = new Image();
+        img.src = imgsrc;
+        img.onload = function(){
+          let svgElement = document.getElementById("resultSVG");
+          svgElement.innerHTML = "";
+          let svgImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
+          svgImage.setAttribute("href",imgsrc);
+          svgElement.setAttribute("viewBox","0 0 "+img.width+" "+img.height);
+          svgElement.appendChild(svgImage);
+        }
+      }
+    }
+
+    function getDataURLFromImg(img) {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL();
+    };
+  </script>
+</body>
+
+</html>
